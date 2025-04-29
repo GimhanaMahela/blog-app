@@ -49,26 +49,24 @@ const registerUser = async (req, res, next) => {
 // @route   POST /api/auth/login
 // @access  Public
 const loginUser = async (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-
   const { email, password } = req.body;
 
   try {
-    const user = await User.findOne({ email });
+    // 1. Check if user exists
+    const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    // 2. Verify password
     const isMatch = await user.comparePassword(password);
 
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    // 3. Generate token
     const token = generateToken(user._id);
 
     res.json({
@@ -79,6 +77,7 @@ const loginUser = async (req, res, next) => {
       token,
     });
   } catch (err) {
+    console.error("Login error:", err);
     next(err);
   }
 };
@@ -138,9 +137,67 @@ const updateUserProfile = async (req, res, next) => {
   }
 };
 
+// @desc    Delete user account
+// @route   DELETE /api/auth/profile
+// @access  Private
+const deleteUserProfile = async (req, res, next) => {
+  try {
+    // 1. Find user with password
+    const user = await User.findById(req.user._id).select("+password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // 2. Verify password
+    if (!req.body.password) {
+      return res.status(400).json({
+        success: false,
+        message: "Password is required for account deletion",
+      });
+    }
+
+    const isMatch = await user.comparePassword(req.body.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid password",
+      });
+    }
+
+    // 3. Delete user's posts (wrapped in try-catch)
+    try {
+      await Post.deleteMany({ author: user._id });
+    } catch (postsError) {
+      console.error("Error deleting user posts:", postsError);
+      // Continue with user deletion even if posts fail to delete
+    }
+
+    // 4. Delete user
+    await user.deleteOne();
+
+    // 5. Send response
+    res.json({
+      success: true,
+      message: "Account and all associated data deleted successfully",
+    });
+  } catch (err) {
+    console.error("Account deletion error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Account deletion failed",
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   getUserProfile,
   updateUserProfile,
+  deleteUserProfile,
 };

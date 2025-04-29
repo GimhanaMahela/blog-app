@@ -122,12 +122,13 @@ const deletePost = async (req, res, next) => {
         .json({ message: "Not authorized to delete this post" });
     }
 
-    await post.remove();
+    await post.deleteOne(); // or use Post.findByIdAndDelete(req.params.id)
     res.json({ message: "Post removed" });
   } catch (err) {
     next(err);
   }
 };
+
 
 // @desc    Like a post
 // @route   PUT /api/posts/:id/like

@@ -6,6 +6,7 @@ const {
   loginUser,
   getUserProfile,
   updateUserProfile,
+  deleteUserProfile,
 } = require("../controllers/auth.controller");
 const { protect } = require("../middlewares/auth.middleware");
 
@@ -55,6 +56,21 @@ router.put(
     check("email", "Please include a valid email").isEmail(),
   ],
   updateUserProfile
+);
+
+// @route   DELETE /api/auth/profile
+// @desc    Delete user account
+// @access  Private
+router.delete(
+  "/profile",
+  protect,
+  [
+    // Optional password confirmation validation
+    check("password", "Password is required for account deletion")
+      .optional()
+      .notEmpty(),
+  ],
+  deleteUserProfile
 );
 
 module.exports = router;
