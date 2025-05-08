@@ -56,7 +56,7 @@ const PostsPage = () => {
                 </Link>
               </h2>
               <p className="text-gray-600 mb-4">
-                Posted by {post.author.name} on{" "}
+                Posted by {post.author?.name || "Unknown"} on{" "}
                 {new Date(post.createdAt).toLocaleDateString()}
               </p>
               <p className="mb-4">{post.content.substring(0, 200)}...</p>

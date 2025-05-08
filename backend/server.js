@@ -46,6 +46,14 @@ const startServer = async () => {
     // Error handler
     app.use(errorHandler);
 
+    app.use(
+      cors({
+        origin: "http://localhost:3000",
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        allowedHeaders: ["Content-Type", "Authorization"],
+      })
+    );
+
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

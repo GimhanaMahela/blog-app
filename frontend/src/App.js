@@ -5,19 +5,17 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ProtectedRoute from "./components/shared/ProtectedRoute";
 import ProfilePage from "./pages/ProfilePage";
-import CreatePostPage from "./pages/CreatePostPage";
 import EditPostPage from "./pages/EditPostPage";
 import SinglePostPage from "./pages/SinglePostPage";
 import PostsPage from "./pages/PostsPage";
 import { ToastContainer } from "react-toastify";
-import ErrorBoundary from "./ErrorBoundary";
 import { AuthProvider } from "./context/AuthContext";
+import CreatePostPage from "./pages/CreatePostPage";
 
 function App() {
   return (
     <>
       <AuthProvider>
-        <ErrorBoundary>
           <Routes>
             <Route
               path="/test"
@@ -52,7 +50,7 @@ function App() {
             </Route>
           </Routes>
           <ToastContainer />
-        </ErrorBoundary>
+        
       </AuthProvider>
     </>
   );

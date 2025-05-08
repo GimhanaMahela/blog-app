@@ -25,10 +25,13 @@ const CreatePostPage = () => {
     setIsLoading(true);
 
     try {
+      console.log("Attempting to create post"); 
       await postService.createPost(postData);
       toast.success("Post created successfully!");
-      navigate("/posts");
+      console.log("Post created successfully"); 
+      window.location.href = "/posts";
     } catch (error) {
+      console.error("Creation error:", error); // Detailed error
       toast.error(error.response?.data?.message || "Failed to create post");
     } finally {
       setIsLoading(false);

@@ -33,6 +33,7 @@ const SinglePostPage = () => {
       toast.info("Please login to like posts");
       return;
     }
+    if (!post) return;
 
     try {
       const updatedPost = await postService.likePost(post._id);
@@ -44,19 +45,46 @@ const SinglePostPage = () => {
 
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
-    if (!comment.trim()) return;
+
+    // Validate input
+    if (!comment.trim()) {
+      toast.warning("Comment cannot be empty");
+      return;
+    }
+
+    // Validate post exists
+    if (!post?._id) {
+      toast.error("Post not available");
+      return;
+    }
 
     try {
+      setIsLoading(true);
       const updatedPost = await postService.addComment(post._id, comment);
+
+      // Validate response
+      if (!updatedPost?.comments) {
+        throw new Error("Invalid response from server");
+      }
+
       setPost(updatedPost);
       setComment("");
-      toast.success("Comment added");
+      toast.success("Comment added successfully");
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to add comment");
+      console.error("Comment submission failed:", error);
+      toast.error(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to add comment"
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleDeleteComment = async (commentId) => {
+    if (!post) return;
+
     try {
       const updatedPost = await postService.deleteComment(post._id, commentId);
       setPost(updatedPost);
@@ -67,13 +95,15 @@ const SinglePostPage = () => {
   };
 
   const handleDeletePost = async () => {
+    if (!post) return;
     if (window.confirm("Are you sure you want to delete this post?")) {
       try {
         await postService.deletePost(post._id);
-        toast.success("Post deleted");
-        navigate("/posts");
+        alert("Post deleted successfully"); // Temporary replacement
+        window.location.href = "/posts"; // Full page reload as test
       } catch (error) {
-        toast.error(error.response?.data?.message || "Failed to delete post");
+        console.error(error);
+        toast.error("Deletion failed");
       }
     }
   };
@@ -86,7 +116,7 @@ const SinglePostPage = () => {
     return <div className="text-center py-8">Post not found</div>;
   }
 
-  const isAuthor = isAuthenticated && user._id === post.author._id;
+  const isAuthor = isAuthenticated && user?._id === post.author?._id;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -112,7 +142,7 @@ const SinglePostPage = () => {
         </div>
 
         <p className="text-gray-600 mb-4">
-          Posted by {post.author.name} on{" "}
+          Posted by {post.author?.name || "Unknown"} on{" "}
           {new Date(post.createdAt).toLocaleDateString()}
         </p>
 
@@ -124,20 +154,20 @@ const SinglePostPage = () => {
           <button
             onClick={handleLike}
             className={`flex items-center space-x-1 ${
-              isAuthenticated && post.likes.includes(user._id)
+              isAuthenticated && post.likes?.includes(user?._id)
                 ? "text-red-500"
                 : "text-gray-500"
             }`}
           >
             <span>Like</span>
-            <span>({post.likes.length})</span>
+            <span>({post.likes?.length || 0})</span>
           </button>
         </div>
       </article>
 
       <section className="bg-white p-6 rounded-lg shadow-md mb-8">
         <h2 className="text-2xl font-bold mb-4">
-          Comments ({post.comments.length})
+          Comments ({post.comments?.length || 0})
         </h2>
 
         {isAuthenticated && (
@@ -149,19 +179,21 @@ const SinglePostPage = () => {
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Add a comment..."
                 className="flex-grow px-3 py-2 border rounded-lg"
+                disabled={isLoading}
                 required
               />
               <button
                 type="submit"
                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                disabled={isLoading}
               >
-                Post
+                {isLoading ? "Posting..." : "Post"}
               </button>
             </div>
           </form>
         )}
 
-        {post.comments.length === 0 ? (
+        {!post.comments || post.comments.length === 0 ? (
           <p className="text-gray-500">No comments yet.</p>
         ) : (
           <div className="space-y-4">
@@ -169,14 +201,16 @@ const SinglePostPage = () => {
               <div key={comment._id} className="border-b pb-4 last:border-b-0">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="font-semibold">{comment.author.name}</p>
+                    <p className="font-semibold">
+                      {comment.author?.name || "Unknown"}
+                    </p>
                     <p className="text-gray-600 text-sm mb-2">
                       {new Date(comment.createdAt).toLocaleString()}
                     </p>
                     <p>{comment.text}</p>
                   </div>
                   {isAuthenticated &&
-                    (user._id === comment.author._id || isAuthor) && (
+                    (user?._id === comment.author?._id || isAuthor) && (
                       <button
                         onClick={() => handleDeleteComment(comment._id)}
                         className="text-red-500 hover:text-red-700 text-sm"

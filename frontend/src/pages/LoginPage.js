@@ -25,4 +25,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage; // Make sure to include default export
+export default LoginPage; 

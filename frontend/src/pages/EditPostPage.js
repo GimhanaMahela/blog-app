@@ -53,16 +53,22 @@ const EditPostPage = () => {
     setIsSubmitting(true);
 
     try {
-      await postService.updatePost(id, postData);
+      const updatedPost = await postService.updatePost(id, postData);
+
+      // Update local state with the returned data
+      setPostData({
+        title: updatedPost.title,
+        content: updatedPost.content,
+      });
+
       toast.success("Post updated successfully!");
-      navigate(`/posts/${id}`);
+      navigate(`/posts/${id}`); // Navigate to the updated post
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to update post");
     } finally {
       setIsSubmitting(false);
     }
   };
-
   if (isLoading) {
     return <div className="text-center py-8">Loading post...</div>;
   }
