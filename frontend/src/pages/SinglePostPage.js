@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import postService from "../services/postService";
 import { toast } from "react-toastify";
+import { io } from "socket.io-client";
 
 const SinglePostPage = () => {
   const { id } = useParams();
@@ -11,7 +12,38 @@ const SinglePostPage = () => {
   const [comment, setComment] = useState("");
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const [socket, setSocket] = useState(null);
 
+  // Initialize socket connection
+  useEffect(() => {
+    const newSocket = io(process.env.REACT_APP_API_URL, {
+      withCredentials: true,
+    });
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, []);
+
+  // Join post room and set up listeners
+  useEffect(() => {
+    if (!socket || !id) return;
+
+    socket.emit("joinPost", id);
+
+    socket.on("postUpdated", (updatedPost) => {
+      if (updatedPost._id === id) {
+        setPost(updatedPost);
+      }
+    });
+
+    return () => {
+      socket.off("postUpdated");
+    };
+  }, [socket, id]);
+
+  // Fetch initial post data
   useEffect(() => {
     const fetchPost = async () => {
       try {
@@ -33,12 +65,36 @@ const SinglePostPage = () => {
       toast.info("Please login to like posts");
       return;
     }
-    if (!post) return;
+    if (!post || !socket) return;
 
     try {
-      const updatedPost = await postService.likePost(post._id);
-      setPost(updatedPost);
+      // Optimistic update - fixed missing closing brace
+      setPost((prev) => {
+        const wasLiked = prev.likes.some(
+          (like) => like.user?._id === user?._id
+        );
+        return {
+          ...prev,
+          likes: wasLiked
+            ? prev.likes.filter((like) => like.user?._id !== user?._id)
+            : [...prev.likes, { user: { _id: user._id, name: user.name } }], // Added missing closing brace
+        };
+      });
+
+      await postService.likePost(post._id);
     } catch (error) {
+      // Revert on error - fixed missing closing brace
+      setPost((prev) => {
+        const wasLiked = prev.likes.some(
+          (like) => like.user?._id === user?._id
+        );
+        return {
+          ...prev,
+          likes: wasLiked
+            ? [...prev.likes, { user: { _id: user._id, name: user.name } }] // Added missing closing brace
+            : prev.likes.filter((like) => like.user?._id !== user?._id),
+        };
+      });
       toast.error(error.response?.data?.message || "Failed to like post");
     }
   };
@@ -46,32 +102,45 @@ const SinglePostPage = () => {
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate input
     if (!comment.trim()) {
       toast.warning("Comment cannot be empty");
       return;
     }
 
-    // Validate post exists
     if (!post?._id) {
       toast.error("Post not available");
       return;
     }
 
+    let newComment;
+
     try {
       setIsLoading(true);
-      const updatedPost = await postService.addComment(post._id, comment);
 
-      // Validate response
-      if (!updatedPost?.comments) {
-        throw new Error("Invalid response from server");
-      }
+      // Optimistic update
+      newComment = {
+        _id: Date.now().toString(), // Temporary ID
+        text: comment,
+        user: { _id: user._id, name: user.name },
+        createdAt: new Date().toISOString(),
+      };
 
-      setPost(updatedPost);
+      setPost((prev) => ({
+        ...prev,
+        comments: [newComment, ...prev.comments],
+      }));
       setComment("");
+
+      await postService.addComment(post._id, comment);
       toast.success("Comment added successfully");
     } catch (error) {
-      console.error("Comment submission failed:", error);
+      // Revert on error
+      if (newComment) {
+        setPost((prev) => ({
+          ...prev,
+          comments: prev.comments.filter((c) => c._id !== newComment._id),
+        }));
+      }
       toast.error(
         error.response?.data?.message ||
           error.message ||
@@ -86,9 +155,9 @@ const SinglePostPage = () => {
     if (!post) return;
 
     try {
-      const updatedPost = await postService.deleteComment(post._id, commentId);
-      setPost(updatedPost);
+      await postService.deleteComment(post._id, commentId);
       toast.success("Comment deleted");
+      navigate("/posts/" + post._id); // Redirect to the same post
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to delete comment");
     }
@@ -99,11 +168,10 @@ const SinglePostPage = () => {
     if (window.confirm("Are you sure you want to delete this post?")) {
       try {
         await postService.deletePost(post._id);
-        alert("Post deleted successfully"); // Temporary replacement
-        window.location.href = "/posts"; // Full page reload as test
+        toast.success("Post deleted");
+        navigate("/posts");
       } catch (error) {
-        console.error(error);
-        toast.error("Deletion failed");
+        toast.error(error.response?.data?.message || "Failed to delete post");
       }
     }
   };
@@ -117,6 +185,8 @@ const SinglePostPage = () => {
   }
 
   const isAuthor = isAuthenticated && user?._id === post.author?._id;
+  const isLiked =
+    isAuthenticated && post.likes?.some((like) => like.user?._id === user?._id);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -154,9 +224,7 @@ const SinglePostPage = () => {
           <button
             onClick={handleLike}
             className={`flex items-center space-x-1 ${
-              isAuthenticated && post.likes?.includes(user?._id)
-                ? "text-red-500"
-                : "text-gray-500"
+              isLiked ? "text-red-500" : "text-gray-500"
             }`}
           >
             <span>Like</span>
@@ -202,7 +270,7 @@ const SinglePostPage = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-semibold">
-                      {comment.author?.name || "Unknown"}
+                      {comment.user?.name || "Unknown"}
                     </p>
                     <p className="text-gray-600 text-sm mb-2">
                       {new Date(comment.createdAt).toLocaleString()}
@@ -210,7 +278,7 @@ const SinglePostPage = () => {
                     <p>{comment.text}</p>
                   </div>
                   {isAuthenticated &&
-                    (user?._id === comment.author?._id || isAuthor) && (
+                    (user?._id === comment.user?._id || isAuthor) && (
                       <button
                         onClick={() => handleDeleteComment(comment._id)}
                         className="text-red-500 hover:text-red-700 text-sm"
